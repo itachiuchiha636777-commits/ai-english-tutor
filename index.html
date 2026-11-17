@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>AI English Tutor</title>
+    <!-- Dono naam support karega: styles.css aur style.css -->
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <!-- Portrait App Wrapper (Chhoti aur Badi dono screen ke liye) -->
+    <div class="app-container">
+      <!-- 1. Start Login Modal -->
+      <div id="loginModal">
+        <div class="login-box">
+          <div class="app-badge">🎙️ AI Speaking Coach</div>
+          <h2>English AI Tutor</h2>
+          <p>
+            Hindi, Marwadi ya tooti-footi English bolkar farratein-daar English
+            seekhein
+          </p>
+          <input
+            type="text"
+            id="userNameInput"
+            placeholder="Apna Naam Likhein"
+            autocomplete="name"
+          />
+          <input
+            type="email"
+            id="userEmailInput"
+            placeholder="Gmail ID (e.g. rahul@gmail.com)"
+            autocomplete="email"
+          />
+          <button type="button" class="btn-primary" id="loginBtn">
+            Start Learning
+          </button>
+        </div>
+      </div>
+
+      <!-- 2. Dark Overlay for Sidebar -->
+      <div id="overlay"></div>
+
+      <!-- 3. Left Hamburger Sidebar -->
+      <aside id="sidebar">
+        <button type="button" class="new-chat-btn" id="newChatBtn">
+          + New Practice Chat
+        </button>
+        <div class="history-title">Saved Chats</div>
+        <ul id="chatList"></ul>
+        <div class="user-footer">
+          <div class="user-info">
+            <span id="displayUser">User</span>
+            <small id="displayEmail"></small>
+          </div>
+          <button type="button" class="logout-btn" id="logoutBtn">
+            Logout
+          </button>
+        </div>
+      </aside>
+
+      <!-- 4. Top Header -->
+      <header>
+        <button type="button" class="menu-btn" id="menuBtn">☰</button>
+        <div class="header-center">
+          <div class="header-title">AI English Coach</div>
+          <span class="status-dot" id="statusText"
+            >Online • Ready to listen</span
+          >
+        </div>
+        <button
+          type="button"
+          class="speaker-toggle"
+          id="muteBtn"
+          title="Voice On/Off"
+        >
+          🔊
+        </button>
+      </header>
+
+      <!-- 5. Chat Messages Area -->
+      <main id="chatBox"></main>
+
+      <!-- 6. Bottom Input & Mic Bar -->
+      <div class="input-area">
+        <button
+          type="button"
+          class="icon-btn"
+          id="micBtn"
+          title="Bolkar likhein"
+        >
+          🎤
+        </button>
+        <input
+          type="text"
+          id="textInput"
+          placeholder="Hindi, Marwadi ya English mein bole/likhein..."
+        />
+        <button type="button" class="icon-btn send-btn" id="sendBtn">➤</button>
+      </div>
+    </div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
