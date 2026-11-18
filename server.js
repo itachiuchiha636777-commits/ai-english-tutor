@@ -94,7 +94,7 @@ app.post("/api/chat", async (req, res) => {
   try {
     const { email, chatId, message, history } = req.body;
 
-    const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+    const model = genAI.getGenerativeModel({ model: "gemini-flash-lite-latest" });
     const historyText = (history || [])
       .map((m) => `${m.sender === "user" ? "Student" : "Coach"}: ${m.text}`)
       .join("\n");
