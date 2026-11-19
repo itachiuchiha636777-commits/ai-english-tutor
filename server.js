@@ -1,0 +1,302 @@
+require("dotenv").config();
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
+const path = require("path");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+app.use(express.static(__dirname));
+// 1. MongoDB Connection
+const MONGO_URI = process.env.MONGO_URI;
+mongoose
+  .connect(MONGO_URI)
+  .then(() => console.log("✅ MongoDB Connected"))
+  .catch((err) => console.log("⚠️ MongoDB Error:", err.message));
+
+// 2. MongoDB User & Chat Schema
+const UserSchema = new mongoose.Schema({
+  name: String,
+  email: { type: String, unique: true, required: true },
+  chats: [
+    {
+      id: Number,
+      title: String,
+      messages: [
+        {
+          sender: String,
+          text: String,
+          timestamp: { type: Date, default: Date.now },
+        },
+      ],
+    },
+  ],
+});
+
+const User = mongoose.model("User", UserSchema);
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
+
+// 3. Google Gemini AI Setup
+
+//const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+/*
+const SYSTEM_PROMPT = `
+                                                                                            You are a friendly, encouraging Indian AI English Speaking Coach.
+                                                                                            Rules:
+                                                                                            1. The user may speak in Hindi, Marwadi/Rajasthani (e.g., "Mharo naam...", "Mane English sikhni hai"), Hinglish, or broken English.
+                                                                                            2. Understand their exact meaning and reply in this structured, short format:
+                                                                                               ✅ Sahi English: "[Correct natural English sentence]"
+                                                                                                  💡 Rule/Matlab: [1 short line in simple Hinglish explaining how to say it]
+                                                                                                     👉 Next Question: [Ask 1 easy follow-up question in English to keep the conversation going]
+                                                                                                     3. ABUSIVE / PROFANITY FILTER: If the user uses swear words, gaali, or vulgar language in Hindi, Marwadi, or English, DO NOT scold angrily and DO NOT repeat the bad word. Calmly reply:"                                                                                                   "Please use polite language! 😊 Chaliye achhe shabdon ke saath English practice karte hain. Tell me, how was your day today?"                                                                                                    `;
+*/
+const SYSTEM_PROMPT = `
+You are a bold, unfiltered, and smart Indian AI English Speaking Coach.
+Rules:
+1. The user may speak in Hindi, Marwadi/Rajasthani, Hinglish, street slang, adult/casual expressions, or broken English.
+2. Never lecture or censor the user. Directly translate and teach the exact meaning in natural English using this short format:
+   ✅ English: "[Natural English translation/expression]"
+      💡 Matlab / Usage: [1 short line in simple Hinglish explaining how native speakers use it]
+         👉 Next: [Ask 1 short casual follow-up question in English]
+         `;
+// API Route 1: User Login & Load Saved Chats
+app.post("/api/login", async (req, res) => {
+  try {
+    const { name, email } = req.body;
+    let user = await User.findOne({ email });
+
+    if (!user) {
+      user = await User.create({
+        name,
+        email,
+        chats: [
+          {
+            id: Date.now(),
+            title: "First Practice",
+            messages: [
+              {
+                sender: "ai",
+                text: `Namaste ${name}! Main aapka English Coach hoon. Aap Hindi, Marwadi ya English mein baat shuru karein!`,
+              },
+            ],
+          },
+        ],
+      });
+    }
+    res.json({ success: true, user, chats: user.chats });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API Route 2: Send Message to Gemini AI & Save in MongoDB
+app.post("/api/chat", async (req, res) => {
+  //try {
+  // const { email, chatId, message, history } = req.body;
+  try {
+    const { email, chatId, title, message, history, allMessages } = req.body;
+
+    //const model = genAI.getGenerativeModel({ model: "llama-3.1-8b-instant" });
+    const historyText = (history || [])
+      .map((m) => `${m.sender === "user" ? "Student" : "Coach"}: ${m.text}`)
+      .join("\n");
+
+    // const prompt = `${SYSTEM_PROMPT}\n\nRecent Conversation:\n${historyText}\n\nStudent says: "${message}"\nCoach reply:`;
+
+    //const result = await model.generateContent(prompt);
+    //const aiReply = result.response.text();
+    const prompt = `${SYSTEM_PROMPT}\n\nRecent Conversation:\n${historyText}\n\nStudent says: "${message}"\nCoach reply:`;
+
+    const groqRes = await fetch(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${GROQ_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "openai/gpt-oss-20b",
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            { role: "user", content: prompt },
+          ],
+        }),
+      }
+    );
+
+    const groqData = await groqRes.json();
+    if (!groqRes.ok) throw new Error(groqData.error?.message || "Groq Error");
+    const aiReply = groqData.choices[0].message.content;
+    // Save in MongoDB if connected
+    if (mongoose.connection.readyState === 1 && email) {
+      const user = await User.findOne({ email });
+      if (user) {
+        let chat = user.chats.find((c) => String(c.id) === String(chatId));
+
+        //  let chat = user.chats.find((c) => c.id === chatId);
+        /* if (!chat) {
+          chat = {
+            id: Number(chatId),
+            title: message.slice(0, 22),
+            messages: [],
+          };
+
+          //chat = { id: chatId, title: message.slice(0, 22), messages: [] };
+          user.chats.unshift(chat);
+        }*/
+        /* if (!chat) {
+          chat = {
+            id: Number(chatId),
+            title: message.slice(0, 22),
+            messages: history && history.length > 0 ? [history[0]] : [],
+          };
+          user.chats.unshift(chat);
+        }
+
+        chat.messages.push({ sender: "user", text: message });
+        chat.messages.push({ sender: "ai", text: aiReply });
+        await user.save();*/
+        if (!chat) {
+          chat = {
+            id: Number(chatId),
+            title: title || message.slice(0, 22),
+            messages: [],
+          };
+          user.chats.unshift(chat);
+        }
+
+        if (allMessages && allMessages.length > 0) {
+          chat.messages = [...allMessages, { sender: "ai", text: aiReply }];
+        } else {
+          chat.messages.push({ sender: "user", text: message });
+          chat.messages.push({ sender: "ai", text: aiReply });
+        }
+        await user.save();
+      }
+    }
+
+    res.json({ reply: aiReply });
+  } catch (error) {
+    res.status(500).json({ error: "AI Server Error: " + error.message });
+  }
+});
+app.post("/api/delete-chat", async (req, res) => {
+  try {
+    const { email, chatId } = req.body;
+    if (mongoose.connection.readyState === 1 && email) {
+      const user = await User.findOne({ email });
+      if (user) {
+        user.chats = user.chats.filter((c) => String(c.id) !== String(chatId));
+        await user.save();
+      }
+    }
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+//const { MsEdgeTTS, OUTPUT_FORMAT } = require("msedge-tts");
+/*
+app.post("/api/tts", async (req, res) => {
+  try {
+    const { text } = req.body;
+    const cleanText = text
+      .replace(/[✅🗣️💡👉👋*"]/g, "")
+      .replace(/English:|Matlab \/ Usage:|Next:/gi, "")
+      .trim();
+
+    const tts = new MsEdgeTTS();
+    // en-IN-NeerjaNeural (प्यारी भारतीय लड़की की आवाज़ जो हिंदी और इंग्लिश दोनों असली बोलती है)
+    // अगर आपको और क्यूट यंग अमेरिकन लड़की की आवाज़ चाहिए तो "en-US-AnaNeural" लिख सकते हैं
+    await tts.setMetadata(
+      "en-US-AnaNeural",
+      OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3
+    );
+
+    const { audioStream } = tts.toStream(cleanText);
+    res.setHeader("Content-Type", "audio/mpeg");
+    audioStream.pipe(res);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});*/
+/*
+app.post("/api/tts", async (req, res) => {
+  try {
+    const { text } = req.body;
+    const cleanText = text
+      .replace(/[✅🗣️💡👉👋*"]/g, "")
+      .replace(/English:|Matlab \/ Usage:|Next:/gi, "")
+      .trim();
+
+    if (!cleanText) return res.status(400).send("No text");
+
+    const tts = new MsEdgeTTS();
+    await tts.setMetadata(
+      "en-US-AriaNeural",
+      OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3
+    );
+
+    const { audioStream } = tts.toStream(cleanText);
+    res.setHeader("Content-Type", "audio/mpeg");
+    audioStream.pipe(res);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});*/
+app.post("/api/tts", async (req, res) => {
+  try {
+    const { text } = req.body;
+    const cleanText = text
+      .replace(/[✅🗣️💡👉👋*"]/g, "")
+      .replace(/English:|Matlab \/ Usage:|Next:/gi, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!cleanText) return res.status(400).send("No text");
+
+    // लंबे टेक्स्ट को 180 अक्षरों के छोटे हिस्सों में बांटें ताकि कुछ भी न कटे
+    const chunks = cleanText.match(/.{1,180}(\s|$)/g) || [cleanText];
+    const audioBuffers = [];
+
+    /*for (const chunk of chunks) {
+      const ttsUrl = `https://google.com{encodeURIComponent(
+                                                                      chunk.trim()
+                                                                            )}&tl=en&client=tw-ob`;*/
+
+    /* for (const chunk of chunks) {
+      const host = "https://google.com";
+      const path = "/translate_tts?ie=UTF-8&tl=en&client=tw-ob&q=";
+      const ttsUrl = host + path + encodeURIComponent(chunk.trim());*/
+    for (const chunk of chunks) {
+      const sub = "translate.";
+      const domain = "google.com";
+      const path = "/translate_tts?ie=UTF-8&tl=en&client=tw-ob&q=";
+      const ttsUrl =
+        "https://" + sub + domain + path + encodeURIComponent(chunk.trim());
+
+      const audioRes = await fetch(ttsUrl, {
+        headers: { "User-Agent": "Mozilla/5.0" },
+      });
+
+      if (audioRes.ok) {
+        const arrayBuffer = await audioRes.arrayBuffer();
+        audioBuffers.push(Buffer.from(arrayBuffer));
+      }
+    }
+
+    if (audioBuffers.length === 0) throw new Error("TTS Fetch Failed");
+
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.send(Buffer.concat(audioBuffers));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
