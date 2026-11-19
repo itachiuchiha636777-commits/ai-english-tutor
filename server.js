@@ -198,9 +198,9 @@ app.post("/api/delete-chat", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-/*
-const { MsEdgeTTS, OUTPUT_FORMAT } = require("msedge-tts");
 
+const { MsEdgeTTS, OUTPUT_FORMAT } = require("msedge-tts");
+/*
 app.post("/api/tts", async (req, res) => {
   try {
     const { text } = req.body;
