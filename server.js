@@ -107,7 +107,7 @@ app.post("/api/chat", async (req, res) => {
     //const aiReply = result.response.text();
     const prompt = `${SYSTEM_PROMPT}\n\nRecent Conversation:\n${historyText}\n\nStudent says: "${message}"\nCoach reply:`;
 
-    const groqRes = await fetch("https://groq.com", {
+    const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
